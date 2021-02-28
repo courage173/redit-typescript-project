@@ -1,9 +1,13 @@
-import { Post } from "../entities/Post";
 import { MyContext } from "src/types";
-import {Resolver, Ctx, Arg, Mutation, InputType, Field, ObjectType} from "type-graphql";
+import {Resolver, Ctx, Arg, Mutation, InputType, Field, ObjectType, Query} from "type-graphql";
 import { User } from "../entities/User";
-import argon2 from "argon2"
+import argon2 from "argon2";
 
+declare module 'express-session' {
+    interface SessionData {
+      userId: number;
+    }
+  }
 @InputType()
 class UsernamePasswordInput {
     @Field()
@@ -34,7 +38,7 @@ export class UserResolver {
     @Mutation(() => UserResponse)
     async register(
      @Arg("options") options: UsernamePasswordInput,
-     @Ctx() {em}: MyContext  
+     @Ctx() {em, req}: MyContext  
     ):Promise<UserResponse>{
         if(options.username.length <= 2){
             return {
@@ -44,7 +48,7 @@ export class UserResolver {
                 }]
             }
         }
-        if(options.password.length <= 6){
+        if(options.password.length < 6){
             return {
                 errors: [{
                     field: 'password',
@@ -53,6 +57,7 @@ export class UserResolver {
             }
         }
       const hashedPassword = await argon2.hash(options.password)  
+      console.log(hashedPassword)
         const user = await em.create(User,{
             username: options.username,
             password: hashedPassword,
@@ -72,15 +77,25 @@ export class UserResolver {
            }
            return err.message
        }
+       //this logins the user
+       req.session.userId = user.id
         return {
             user
         }
     }
 
+    @Query(() => User, { nullable: true})
+    async me(@Ctx() { em, req}: MyContext){ 
+        if(!req.session.userId){
+            return null;
+        }
+        const user = await em.findOne(User, {id: req.session.userId})
+        return user
+    }
     @Mutation(() => UserResponse)
     async login(
      @Arg("options") options: UsernamePasswordInput,
-     @Ctx() {em}: MyContext  
+     @Ctx() {em, req}: MyContext  
     ): Promise<UserResponse>{
         const user = await em.findOne(User, {username: options.username.toLowerCase()})
         if(!user){
@@ -104,6 +119,7 @@ export class UserResolver {
                 ]
             }
         }
+        req.session.userId = user.id
         return {
             user,
         }

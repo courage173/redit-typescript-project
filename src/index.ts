@@ -8,18 +8,44 @@ import { HelloResolver } from "./resolvers/hello";
 import 'reflect-metadata';
 import { PostResolver } from "./resolvers/post";
 import { UserResolver } from "./resolvers/user";
+import redis from 'redis';
+import session from 'express-session';
+import connectRedis from 'connect-redis';
+import { MyContext } from "./types";
 
 
 const main = async() => {
     const orm =await MikroORM.init(microConfig);
     await orm.getMigrator().up();
     const app = express()
+
+    const RedisStore = connectRedis(session)
+    const redisClient = redis.createClient()
+
+    app.use(
+    session({
+        name: "qid",
+        store: new RedisStore({
+            client: redisClient, 
+            disableTouch: true,
+        }),
+        cookie:{
+            maxAge: 1000 * 60 * 60 * 24 * 365 * 10,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: __prod__,
+        },
+        saveUninitialized: false,
+        secret: 'ilovemylatestredisinstalled',
+        resave: false,
+    })
+    )
     const appoloServer = new ApolloServer({
         schema: await buildSchema({
             resolvers: [HelloResolver, PostResolver, UserResolver],
             validate: false
         }),
-        context: () => ({em: orm.em})
+        context: ({req,res}): MyContext => ({em: orm.em, req,res})
     });
 
     appoloServer.applyMiddleware({app})
