@@ -87,7 +87,6 @@ let UserResolver = class UserResolver {
                 };
             }
             const hashedPassword = yield argon2_1.default.hash(options.password);
-            console.log(hashedPassword);
             const user = yield em.create(User_1.User, {
                 username: options.username,
                 password: hashedPassword,
@@ -96,7 +95,7 @@ let UserResolver = class UserResolver {
                 yield em.persistAndFlush(user);
             }
             catch (err) {
-                if (err.code === "23505" || err.detail.includes("already exist")) {
+                if (err.detail.includes("already exist")) {
                     return {
                         errors: [
                             {
